@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Health Buddy | Multilingual Health AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 100%; height: 100%; overflow: hidden; }
+        body { font-family: 'Inter', sans-serif; background: #f3f4f6; display: flex; align-items: center; justify-content: center; }
+        
+        .chat-bubble-user { background-color: #DCF8C6; align-self: flex-end; border-bottom-right-radius: 12px; border-bottom-left-radius: 12px; border-top-left-radius: 12px; }
+        .chat-bubble-bot { background-color: #FFFFFF; align-self: flex-start; border-bottom-right-radius: 12px; border-bottom-left-radius: 12px; border-top-right-radius: 12px; }
+        
+        .typing-indicator { display: flex; gap: 4px; padding: 10px; }
+        .typing-dot { width: 8px; height: 8px; border-radius: 50%; background-color: #999; animation: typing 1.4s infinite; }
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typing { 0%, 60%, 100% { opacity: 0.3; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-10px); } }
+
+        .menu-button {
+            background-color: #ffffff; border: 1.5px solid #0d9488; color: #0d9488;
+            padding: 0.6rem 1.2rem; margin: 0.3rem; border-radius: 9999px;
+            cursor: pointer; font-size: 0.85rem; font-weight: 500; transition: all 0.2s ease;
+        }
+        .menu-button:hover { background-color: #0d9488; color: #ffffff; transform: translateY(-1.5px); }
+
+        .sos-btn {
+            position: fixed; top: 1rem; right: 1rem; z-index: 50;
+            width: 55px; height: 55px; border-radius: 50%;
+            background: linear-gradient(135deg, #dc2626, #ef4444);
+            color: white; border: none; cursor: pointer; font-weight: bold;
+            box-shadow: 0 10px 20px rgba(220, 38, 38, 0.4);
+            animation: pulse-sos 2s infinite;
+            display: flex; align-items: center; justify-content: center;
+        }
+        @keyframes pulse-sos {
+            0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7); }
+            70% { box-shadow: 0 0 0 15px rgba(220, 38, 38, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+        }
+
+        .modal {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.7); z-index: 1000; align-items: center; justify-content: center;
+        }
+        .modal.active { display: flex; }
+        .modal-content {
+            background: white; border-radius: 20px; padding: 1.5rem; width: 90%; max-width: 500px;
+            max-height: 90vh; overflow-y: auto;
+        }
+        
+        #chat-area::-webkit-scrollbar { width: 4px; }
+        #chat-area::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    </style>
+</head>
+<body>
+
+    <button onclick="openSOSModal()" class="sos-btn">SOS</button>
+    <button onclick="openSettingsModal()" style="position: fixed; top: 1rem; left: 1rem; z-index: 50; width: 45px; height: 45px; border-radius: 50%; background: #0d9488; color: white; border: none; cursor: pointer; box-shadow: 0 4px 12px rgba(13, 148, 136, 0.3);">⚙️</button>
+
+    <div style="width: 100%; height: 100%; max-width: 500px; display: flex; flex-direction: column; background: white; border-radius: 0; box-shadow: 0 10px 40px rgba(0,0,0,0.1); overflow: hidden;">
+        <header style="background: #0d9488; color: white; padding: 1rem; display: flex; align-items: center; gap: 1rem;">
+            <div style="width: 40px; height: 40px; background: rgba(255,255,255,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center;">🏥</div>
+            <div>
+                <h1 style="font-size: 1.1rem; font-weight: bold;">Health Buddy</h1>
+                <p id="header-subtitle" style="font-size: 0.75rem; opacity: 0.9;">Symptom Checker & Health Guide</p>
+            </div>
+        </header>
+
+        <main id="chat-area" style="flex: 1; padding: 1rem; overflow-y: auto; display: flex; flex-direction: column; gap: 0.75rem; background: #f9fafb;"></main>
+
+        <footer style="padding: 1rem; background: white; border-top: 1px solid #e5e7eb; display: flex; align-items: center; gap: 0.5rem;">
+            <button onclick="startVoice()" style="color: #64748b;" title="Voice Input">🎤</button>
+            <input type="text" id="user-input" style="flex: 1; background: #f3f4f6; border-radius: 9999px; padding: 0.6rem 1.2rem; border: none; outline: none;" placeholder="Type here...">
+            <button onclick="sendMessage()" style="background: #0d9488; color: white; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">➔</button>
+        </footer>
+    </div>
+
+    <div id="sos-modal" class="modal">
+        <div class="modal-content text-center">
+            <h2 id="sos-title" class="text-2xl font-bold text-red-600 mb-4">🚨 EMERGENCY SOS 🚨</h2>
+            <div id="sos-timer" class="text-4xl font-mono font-bold mb-4">00:00</div>
+            <p id="sos-status" class="mb-4 text-gray-600">Detecting location...</p>
+            <button id="btn-sos-call" onclick="quickCall('108')" class="w-full bg-green-600 text-white p-3 rounded-lg mb-2 font-bold">📞 Call Ambulance (108)</button>
+            <button id="btn-sos-sms" onclick="sendEmergencySMS()" class="w-full bg-blue-600 text-white p-3 rounded-lg mb-2 font-bold">💬 SMS My Location</button>
+            <button id="btn-sos-cancel" onclick="closeSOSModal()" class="w-full bg-gray-400 text-white p-3 rounded-lg font-bold">Cancel</button>
+        </div>
+    </div>
+
+    <div id="settings-modal" class="modal">
+        <div class="modal-content">
+            <h2 id="settings-title" class="text-xl font-bold text-teal-700 mb-4">⚙️ Health Profile</h2>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Language / भाषा</label>
+            <select id="lang-switch" class="w-full border p-2 mb-4 rounded bg-white" onchange="changeLanguage(this.value)">
+                <option value="en">English</option>
+                <option value="hi">हिंदी (Hindi)</option>
+            </select>
+            <input type="number" id="p-age" placeholder="Age" class="w-full border p-2 mb-2 rounded">
+            <input type="text" id="p-blood" placeholder="Blood Group" class="w-full border p-2 mb-2 rounded">
+            <textarea id="p-allergies" placeholder="Allergies" class="w-full border p-2 mb-4 rounded"></textarea>
+            <button id="btn-save-settings" onclick="saveProfile()" class="w-full bg-teal-600 text-white p-3 rounded-lg font-bold">Save Changes</button>
+            <button id="btn-close-settings" onclick="closeSettingsModal()" class="w-full mt-2 text-gray-500">Close</button>
+        </div>
+    </div>
+
+    <script>
+        const GEMINI_API_KEY = ""; 
+        let currentLang = 'en';
+        let userName = '';
+        let flowState = 'lang_selection'; 
+        let currentSymptomData = null;
+        let followUpIndex = 0;
+        let collectedAnswers = {};
+        let userWeight = 0;
+        let sosStartTime;
+
+        const i18n = {
+            en: {
+                welcome: "Welcome! I'm your Health Buddy. Please select your language:",
+                askName: "Excellent! What is your name?",
+                menuGreeting: "Nice to meet you, <b>{name}</b>! How can I help you today?",
+                menuOptions: ['Symptom Checker', 'Medicine Info', 'Ask Health Question', 'Find Hospital', 'BMI Calculator'],
+                promptSymptom: "What symptoms are you experiencing? (e.g. fever, cough, headache, stomach pain)",
+                promptMedicine: "Enter a medicine name to get details (e.g. Paracetamol, Metformin, Aspirin):",
+                promptAsk: "Go ahead, ask me anything about health, nutrition, or medicine.",
+                promptPincode: "Please enter your 6-digit Pincode:",
+                promptWeight: "What is your weight in kg?",
+                promptHeight: "What is your height in cm?",
+                bmiResult: "Your BMI is <b>{bmi}</b>. ({category})",
+                assessmentTitle: "Assessment",
+                disclaimer: "<i>Disclaimer: This is not a professional diagnosis. Always consult a doctor for medical advice.</i>",
+                sosDetecting: "Detecting location...",
+                sosLocationFound: "📍 Location found: ",
+                headerSubtitle: "Symptom Checker & Health Guide",
+                settingsTitle: "Health Profile",
+                btnSave: "Save Changes",
+                btnClose: "Close",
+                btnYes: "Yes",
+                btnNo: "No",
+                aiChecking: "Checking database and AI...",
+                aiResponse: "🤖 Result: ",
+                medNotFound: "Not in local list. Asking AI..."
+            },
+            hi: {
+                welcome: "नमस्ते! मैं आपका हेल्थ बडी हूँ। कृपया अपनी भाषा चुनें:",
+                askName: "बहुत अच्छे! आपका नाम क्या है?",
+                menuGreeting: "आपसे मिलकर खुशी हुई, <b>{name}</b>! मैं आज आपकी कैसे मदद कर सकता हूँ?",
+                menuOptions: ['लक्षण जांच', 'दवा की जानकारी', 'स्वास्थ्य प्रश्न पूछें', 'अस्पताल खोजें', 'BMI कैलकुलेटर'],
+                promptSymptom: "आपको क्या लक्षण महसूस हो रहे हैं? (जैसे: बुखार, खांसी, सिरदर्द, पेट दर्द)",
+                promptMedicine: "दवा का नाम लिखें (जैसे: Paracetamol, Metformin, Aspirin):",
+                promptAsk: "मुझसे स्वास्थ्य, पोषण या दवा के बारे में कुछ भी पूछें।",
+                promptPincode: "कृपया अपना 6 अंकों का पिनकोड दर्ज करें:",
+                promptWeight: "आपका वजन किलोग्राम (kg) में क्या है?",
+                promptHeight: "आपकी ऊंचाई सेंटीमीटर (cm) में क्या है?",
+                bmiResult: "आपका BMI <b>{bmi}</b> है। ({category})",
+                assessmentTitle: "आकलन",
+                disclaimer: "<i>अस्वीकरण: यह पेशेवर निदान नहीं है। कृपया चिकित्सा सलाह के लिए डॉक्टर से मिलें।</i>",
+                sosDetecting: "लोकेशन खोजी जा रही है...",
+                sosLocationFound: "📍 लोकेशन मिल गई: ",
+                headerSubtitle: "लक्षण जांच और स्वास्थ्य गाइड",
+                settingsTitle: "स्वास्थ्य प्रोफ़ाइल",
+                btnSave: "परिवर्तन सहेजें",
+                btnClose: "बंद करें",
+                btnYes: "हाँ",
+                btnNo: "नहीं",
+                aiChecking: "डेटाबेस और AI की जांच की जा रही है...",
+                aiResponse: "🤖 परिणाम: ",
+                medNotFound: "स्थानीय सूची में नहीं मिला। AI से पूछ रहा हूँ..."
+            }
+        };
+
+        const symptomsEngine = {
+            "fever": {
+                en: {
+                    questions: [{ q: "Is it high (above 102°F) with chills?", key: "chills" }, { q: "Do you have severe joint/bone pain?", key: "joint_pain" }, { q: "Is there a skin rash?", key: "rash" }],
+                    diagnose: (ans) => {
+                        if (ans.joint_pain && ans.rash) return "Likely **Dengue**. Drink plenty of fluids, rest, and monitor platelet count.";
+                        if (ans.chills) return "Possible **Malaria**. Consult a doctor for a blood test.";
+                        return "Likely **Viral Fever**. Rest and stay hydrated. If it persists > 3 days, see a doctor.";
+                    }
+                },
+                hi: {
+                    questions: [{ q: "क्या यह ठंड के साथ तेज (102°F से ऊपर) है?", key: "chills" }, { q: "क्या आपको जोड़ों या हड्डियों में तेज दर्द है?", key: "joint_pain" }, { q: "क्या त्वचा पर चकत्ते (rash) हैं?", key: "rash" }],
+                    diagnose: (ans) => {
+                        if (ans.joint_pain && ans.rash) return "संभावित **डेंगू**। खूब तरल पदार्थ पिएं, आराम करें और प्लेटलेट काउंट की निगरानी करें।";
+                        if (ans.chills) return "संभावित **मलेरिया**। रक्त परीक्षण के लिए डॉक्टर से मिलें।";
+                        return "संभावित **वायरल बुखार**। आराम करें और हाइड्रेटेड रहें।";
+                    }
+                }
+            },
+            "cough": {
+                en: {
+                    questions: [{ q: "Is the cough dry or with phlegm?", key: "phlegm" }, { q: "Do you have difficulty breathing or wheezing?", key: "breath" }, { q: "Has it lasted more than 2 weeks?", key: "duration" }],
+                    diagnose: (ans) => {
+                        if (ans.breath) return "Possible **Asthma** or **Bronchitis**. Seek medical help if breathing is difficult.";
+                        if (ans.duration) return "Requires testing for **Tuberculosis**. Please visit a clinic.";
+                        if (ans.phlegm) return "Likely **Chest Infection**. Steam inhalation may help.";
+                        return "Likely **Common Cold** or allergies.";
+                    }
+                },
+                hi: {
+                    questions: [{ q: "क्या खांसी सूखी है या बलगम वाली?", key: "phlegm" }, { q: "क्या सांस लेने में तकलीफ हो रही है?", key: "breath" }, { q: "क्या यह 2 सप्ताह से अधिक समय से है?", key: "duration" }],
+                    diagnose: (ans) => {
+                        if (ans.breath) return "संभावित **दमा** या **ब्रोंकाइटिस**। सांस लेने में दिक्कत होने पर डॉक्टर से मिलें।";
+                        if (ans.duration) return "तपेदिक (TB) के परीक्षण की आवश्यकता है। कृपया क्लीनिक जाएं।";
+                        return "संभावित **सामान्य सर्दी** या एलर्जी।";
+                    }
+                }
+            },
+            "headache": {
+                en: {
+                    questions: [{ q: "Is there neck stiffness or high fever?", key: "stiffness" }, { q: "Is the pain on one side with nausea?", key: "nausea" }],
+                    diagnose: (ans) => {
+                        if (ans.stiffness) return "🚨 **Emergency**: Neck stiffness + Fever could be **Meningitis**. Go to ER immediately.";
+                        if (ans.nausea) return "Likely **Migraine**. Rest in a dark, quiet room.";
+                        return "Likely **Tension Headache**. Stay hydrated and rest.";
+                    }
+                },
+                hi: {
+                    questions: [{ q: "क्या गर्दन में अकड़न या तेज बुखार है?", key: "stiffness" }, { q: "क्या दर्द एक तरफ है और मतली महसूस हो रही है?", key: "nausea" }],
+                    diagnose: (ans) => {
+                        if (ans.stiffness) return "🚨 **इमरजेंसी**: गर्दन में अकड़न और बुखार **मेनिन्जाइटिस** हो सकता है। तुरंत अस्पताल जाएं।";
+                        if (ans.nausea) return "संभावित **माइग्रेन**। अंधेरे कमरे में आराम करें।";
+                        return "संभावित **तनाव सिरदर्द**।";
+                    }
+                }
+            },
+            "stomach": {
+                en: {
+                    questions: [{ q: "Burning sensation in chest?", key: "acid" }, { q: "Sharp pain in lower right side?", key: "appendix" }, { q: "Frequent loose motions?", key: "diarrhea" }],
+                    diagnose: (ans) => {
+                        if (ans.appendix) return "🚨 **Warning**: Sharp lower right pain could be **Appendicitis**. See a surgeon immediately.";
+                        if (ans.acid) return "Likely **Acid Reflux**. Avoid spicy food.";
+                        if (ans.diarrhea) return "Possible **Food Poisoning**. Drink ORS.";
+                        return "General **Indigestion**. Rest your stomach.";
+                    }
+                },
+                hi: {
+                    questions: [{ q: "सीने में जलन महसूस हो रही है?", key: "acid" }, { q: "पेट के निचले दाहिने हिस्से में तेज दर्द है?", key: "appendix" }, { q: "बार-बार दस्त हो रहे हैं?", key: "diarrhea" }],
+                    diagnose: (ans) => {
+                        if (ans.appendix) return "🚨 **चेतावनी**: निचले दाहिने हिस्से में दर्द **अपेंडिसाइटिस** हो सकता है। तुरंत डॉक्टर से मिलें।";
+                        if (ans.acid) return "संभावित **एसिडिटी**। मसालेदार भोजन से बचें।";
+                        if (ans.diarrhea) return "संभावित **फूड पॉइजनिंग**। ORS पिएं।";
+                        return "सामान्य **बदहजमी**।";
+                    }
+                }
+            },
+            "chest pain": {
+                en: {
+                    questions: [{ q: "Pain radiating to left arm or jaw?", key: "heart" }, { q: "Shortness of breath or sweating?", key: "breath" }],
+                    diagnose: (ans) => {
+                        return "🚨 **CRITICAL**: Chest pain must be evaluated at a hospital (ER) immediately to rule out a **Heart Attack**.";
+                    }
+                },
+                hi: {
+                    questions: [{ q: "क्या दर्द बाएं हाथ या जबड़े तक जा रहा है?", key: "heart" }, { q: "सांस लेने में तकलीफ या पसीना आ रहा है?", key: "breath" }],
+                    diagnose: (ans) => {
+                        return "🚨 **गंभीर**: सीने में दर्द होने पर तुरंत अस्पताल (ER) जाएं, यह **दिल का दौरा** हो सकता है।";
+                    }
+                }
+            }
+        };
+
+        const medicineDB = {
+            "paracetamol": { en: "Pain reliever and fever reducer. Dose: Max 4000mg/day. Side effects: Nausea.", hi: "दर्द निवारक और बुखार की दवा। डोज: अधिकतम 4000mg/दिन। दुष्प्रभाव: मतली।" },
+            "ibuprofen": { en: "NSAID for pain and fever. Take with food. Side effects: Heartburn.", hi: "दर्द और बुखार के लिए। भोजन के साथ लें। दुष्प्रभाव: सीने में जलन।" },
+            "metformin": { en: "For Type 2 Diabetes. Take with meals. Side effects: Diarrhea.", hi: "टाइप 2 मधुमेह के लिए। भोजन के साथ लें। दुष्प्रभाव: दस्त।" },
+            "aspirin": { en: "Pain reliever and blood thinner. Side effects: Stomach irritation.", hi: "दर्द निवारक और खून पतला करने वाली दवा। दुष्प्रभाव: पेट में जलन।" },
+            "atorvastatin": { en: "For High Cholesterol. Side effects: Muscle pain.", hi: "कोलेस्ट्रॉल के लिए। दुष्प्रभाव: मांसपेशियों में दर्द।" },
+            "amlodipine": { en: "For High Blood Pressure. Side effects: Ankle swelling.", hi: "हाई बीपी के लिए। दुष्प्रभाव: टखनों में सूजन।" },
+            "amoxicillin": { en: "Antibiotic for bacterial infections. Side effects: Rash, diarrhea.", hi: "बैक्टीरियल संक्रमण के लिए एंटीबायोटिक। दुष्प्रभाव: दस्त।" },
+            "omeprazole": { en: "For acidity/GERD. Take before breakfast. Side effects: Gas.", hi: "एसिडिटी के लिए। नाश्ते से पहले लें।" },
+            "azithromycin": { en: "Antibiotic for lung infections. Side effects: Stomach cramps.", hi: "संक्रमण के लिए एंटीबायोटिक। दुष्प्रभाव: पेट में मरोड़।" },
+            "cetirizine": { en: "For allergies. Side effects: Mild sleepiness.", hi: "एलर्जी के लिए। दुष्प्रभाव: हल्की नींद।" }
+        };
+
+        const chatArea = document.getElementById('chat-area');
+        const userInput = document.getElementById('user-input');
+
+        function addMsg(text, type) {
+            const div = document.createElement('div');
+            div.className = `p-3 rounded-2xl max-w-[85%] shadow-sm text-sm ${type === 'user' ? 'chat-bubble-user ml-auto' : 'chat-bubble-bot mr-auto'}`;
+            div.innerHTML = text;
+            chatArea.appendChild(div);
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+
+        function showButtons(options, callback) {
+            const wrap = document.createElement('div');
+            wrap.className = 'flex flex-wrap gap-2 my-2';
+            options.forEach(opt => {
+                const btn = document.createElement('button');
+                btn.className = 'menu-button';
+                btn.innerText = opt;
+                btn.onclick = () => {
+                    addMsg(opt, 'user');
+                    wrap.remove();
+                    callback(opt);
+                };
+                wrap.appendChild(btn);
+            });
+            chatArea.appendChild(wrap);
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+
+        function changeLanguage(lang) {
+            currentLang = lang;
+            updateUIStrings();
+            showMenu();
+        }
+
+        function updateUIStrings() {
+            const t = i18n[currentLang];
+            document.getElementById('header-subtitle').innerText = t.headerSubtitle;
+            document.getElementById('settings-title').innerText = t.settingsTitle;
+            document.getElementById('btn-save-settings').innerText = t.btnSave;
+            document.getElementById('btn-close-settings').innerText = t.btnClose;
+            userInput.placeholder = currentLang === 'en' ? "Type here..." : "यहाँ लिखें...";
+        }
+
+        async function processInput(val) {
+            const msg = val.trim();
+            const lowerVal = msg.toLowerCase();
+            const t = i18n[currentLang];
+
+            if (flowState === 'naming') {
+                userName = msg;
+                flowState = 'menu';
+                addMsg(t.menuGreeting.replace('{name}', userName), 'bot');
+                showMenu();
+            } 
+            else if (flowState === 'symptom_start') {
+                let match = null;
+                for (let key in symptomsEngine) {
+                    if (lowerVal.includes(key)) {
+                        match = key;
+                        break;
+                    }
+                }
+
+                if (match) {
+                    currentSymptomData = symptomsEngine[match][currentLang];
+                    followUpIndex = 0;
+                    collectedAnswers = {};
+                    askFollowUp();
+                } else {
+                    addMsg(t.aiChecking, 'bot');
+                    const aiRes = await getAIResponse(`As a health assistant, please provide a professional assessment for these symptoms: ${val}`);
+                    addMsg(t.aiResponse + aiRes, 'bot');
+                    setTimeout(showMenu, 6000);
+                }
+            }
+            else if (flowState === 'medicine_search') {
+                let foundKey = null;
+                const formattedKey = lowerVal.replace(/\s+/g, '-');
+                if (medicineDB[formattedKey]) {
+                    foundKey = formattedKey;
+                } else {
+                    for (let key in medicineDB) {
+                        if (key.includes(formattedKey) || formattedKey.includes(key)) {
+                            foundKey = key;
+                            break;
+                        }
+                    }
+                }
+
+                if (foundKey) {
+                    const info = medicineDB[foundKey][currentLang];
+                    addMsg(`💊 <b>${foundKey.replace(/-/g, ' ').toUpperCase()}</b><br><br>${info}`, 'bot');
+                    addMsg(t.disclaimer, 'bot');
+                    setTimeout(showMenu, 5000);
+                } else {
+                    addMsg(t.medNotFound, 'bot');
+                    const aiRes = await getAIResponse(`Provide comprehensive medical details for the medicine '${msg}' in ${currentLang}. Include typical uses, side effects, and important health warnings.`);
+                    addMsg(t.aiResponse + aiRes, 'bot');
+                    setTimeout(showMenu, 5000);
+                }
+            }
+            else if (flowState === 'bmi_w') {
+                userWeight = parseFloat(msg);
+                if (isNaN(userWeight)) return addMsg("Enter a valid number.", "bot");
+                flowState = 'bmi_h';
+                addMsg(t.promptHeight, 'bot');
+            }
+            else if (flowState === 'bmi_h') {
+                let height = parseFloat(msg);
+                if (isNaN(height)) return addMsg("Enter a valid number.", "bot");
+                let bmi = (userWeight / ((height / 100) ** 2)).toFixed(1);
+                addMsg(t.bmiResult.replace('{bmi}', bmi).replace('{category}', bmi < 18.5 ? "Underweight" : bmi < 25 ? "Normal" : "Overweight"), 'bot');
+                setTimeout(showMenu, 4000);
+            }
+            else if (flowState === 'pincode') {
+                const mapUrl = `https://www.google.com/maps/search/hospitals+near+${msg}/`;
+                addMsg(`<a href="${mapUrl}" target="_blank" class="text-blue-600 underline font-bold">Open Maps for ${msg}</a>`, 'bot');
+                setTimeout(showMenu, 4000);
+            }
+            else if (flowState === 'free_ask') {
+                const aiRes = await getAIResponse(`As a medical assistant, please answer this query accurately and clearly: ${val}`);
+                addMsg(t.aiResponse + aiRes, 'bot');
+                setTimeout(showMenu, 6000);
+            }
+            else if (flowState === 'menu') {
+                handleMenu(val);
+            }
+        }
+
+        function askFollowUp() {
+            flowState = 'symptom_followup';
+            const qObj = currentSymptomData.questions[followUpIndex];
+            const t = i18n[currentLang];
+            addMsg(qObj.q, 'bot');
+            showButtons([t.btnYes, t.btnNo], (ans) => {
+                collectedAnswers[qObj.key] = (ans === t.btnYes);
+                followUpIndex++;
+                if (followUpIndex < currentSymptomData.questions.length) {
+                    askFollowUp();
+                } else {
+                    const result = currentSymptomData.diagnose(collectedAnswers);
+                    addMsg(`🩺 <b>${t.assessmentTitle}:</b><br>${result}`, 'bot');
+                    addMsg(t.disclaimer, 'bot');
+                    setTimeout(showMenu, 6000);
+                }
+            });
+        }
+
+        function showMenu() {
+            flowState = 'menu';
+            showButtons(i18n[currentLang].menuOptions, handleMenu);
+        }
+
+        function handleMenu(choice) {
+            const t = i18n[currentLang];
+            const idx = t.menuOptions.indexOf(choice);
+            if (idx === 0) { flowState = 'symptom_start'; addMsg(t.promptSymptom, 'bot'); } 
+            else if (idx === 1) { flowState = 'medicine_search'; addMsg(t.promptMedicine, 'bot'); }
+            else if (idx === 2) { flowState = 'free_ask'; addMsg(t.promptAsk, 'bot'); }
+            else if (idx === 3) { flowState = 'pincode'; addMsg(t.promptPincode, 'bot'); }
+            else if (idx === 4) { flowState = 'bmi_w'; addMsg(t.promptWeight, 'bot'); }
+        }
+
+        async function getAIResponse(prompt) {
+            if (!GEMINI_API_KEY) return currentLang === 'en' ? "AI services are currently limited. Please consult a doctor." : "AI सेवाएं अभी सीमित हैं। कृपया डॉक्टर से सलाह लें।";
+            try {
+                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                });
+                const d = await res.json();
+                return d.candidates[0].content.parts[0].text;
+            } catch (e) { return "..."; }
+        }
+
+        function sendMessage() {
+            const v = userInput.value.trim();
+            if (!v) return;
+            addMsg(v, 'user');
+            userInput.value = '';
+            processInput(v);
+        }
+
+        function init() {
+            addMsg("Language / भाषा चुनें:", 'bot');
+            showButtons(['English', 'हिंदी'], (choice) => {
+                currentLang = choice === 'English' ? 'en' : 'hi';
+                updateUIStrings();
+                flowState = 'naming';
+                addMsg(i18n[currentLang].askName, 'bot');
+            });
+        }
+
+        function openSOSModal() {
+            document.getElementById('sos-modal').classList.add('active');
+            sosStartTime = Date.now();
+            updateSOSTimer();
+            const t = i18n[currentLang];
+            navigator.geolocation.getCurrentPosition(p => {
+                document.getElementById('sos-status').innerHTML = t.sosLocationFound + `${p.coords.latitude.toFixed(4)}, ${p.coords.longitude.toFixed(4)}`;
+            });
+        }
+
+        function closeSOSModal() {
+            document.getElementById('sos-modal').classList.remove('active');
+        }
+
+        function updateSOSTimer() {
+            if (!document.getElementById('sos-modal').classList.contains('active')) return;
+            const elapsed = Math.floor((Date.now() - sosStartTime) / 1000);
+            const m = Math.floor(elapsed / 60).toString().padStart(2, '0');
+            const s = (elapsed % 60).toString().padStart(2, '0');
+            document.getElementById('sos-timer').innerText = `${m}:${s}`;
+            setTimeout(updateSOSTimer, 1000);
+        }
+
+        function quickCall(n) {
+            window.location.href = `tel:${n}`;
+        }
+
+        function sendEmergencySMS() {
+            const statusText = document.getElementById('sos-status').innerText;
+            const userNameText = userName ? ` (User: ${userName})` : "";
+            const msg = `🆘 SOS ALERT! I need immediate medical help! ${statusText}${userNameText}. Please send assistance urgently.`;
+            window.location.href = `sms:?body=${encodeURIComponent(msg)}`;
+        }
+
+        function openSettingsModal() { document.getElementById('settings-modal').classList.add('active'); }
+        function closeSettingsModal() { document.getElementById('settings-modal').classList.remove('active'); }
+        function saveProfile() { addMsg("Saved!", "bot"); closeSettingsModal(); }
+
+        function startVoice() {
+            const rec = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!rec) return;
+            const recognition = new rec();
+            recognition.lang = currentLang === 'hi' ? 'hi-IN' : 'en-US';
+            recognition.onresult = (e) => {
+                userInput.value = e.results[0][0].transcript;
+                sendMessage();
+            };
+            recognition.start();
+        }
+
+        window.onload = init;
+        userInput.addEventListener("keypress", (e) => { if(e.key === "Enter") sendMessage(); });
+    </script>
+</body>
+</html>
